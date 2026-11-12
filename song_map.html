@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>《清明上河图》微观社会切片探究</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background-color: #1a1a1a; }
+
+        .top-bar {
+            position: fixed; top: 15px; left: 20px; z-index: 99999;
+            background: rgba(0, 0, 0, 0.85); color: #f0e6d2;
+            padding: 8px 16px; border-radius: 20px; font-size: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.2); pointer-events: auto;
+            display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+        }
+
+        .legend-group {
+            display: flex; gap: 10px; align-items: center; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 12px;
+        }
+
+        .legend-item { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .legend-dot.key { background-color: #ff5500; box-shadow: 0 0 6px #ff5500; }
+        .legend-dot.bg { background-color: #d4a373; opacity: 0.8; }
+
+        .top-bar button {
+            background: #ff5500; border: none; color: white; padding: 4px 10px;
+            border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;
+        }
+
+        .scroll-container {
+            width: 100%; height: 100vh; overflow-x: auto; overflow-y: hidden;
+            white-space: nowrap; position: relative; background-color: #0d0d0d;
+            display: flex; align-items: center;
+        }
+
+        .map-wrapper { position: relative; display: inline-block; height: 85vh; }
+        .map-wrapper img { height: 100%; display: block; pointer-events: none; }
+
+        /* 呼吸光点样式 - 默认背景人物 */
+        .hotspot {
+            position: absolute; width: 22px; height: 22px;
+            background-color: rgba(212, 163, 115, 0.65); border: 2px solid rgba(255, 255, 255, 0.7);
+            border-radius: 50%; cursor: pointer;
+            box-shadow: 0 0 8px rgba(212, 163, 115, 0.4);
+            animation: pulse-bg 2s infinite ease-in-out;
+            transform: translate(-50%, -50%); z-index: 99998;
+        }
+
+        /* 关键核心人物光点样式 */
+        .hotspot.key-character {
+            width: 26px; height: 26px;
+            background-color: #ff5500; border: 3px solid #ffffff;
+            box-shadow: 0 0 15px #ff5500, 0 0 30px #ff5500;
+            animation: pulse-key 1.5s infinite ease-in-out;
+            z-index: 99999;
+        }
+
+        .hotspot-label {
+            position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.9); color: #fff; padding: 3px 8px; font-size: 12px;
+            border-radius: 4px; white-space: nowrap; pointer-events: none; display: none;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .edit-mode .hotspot-label { display: block; }
+        .edit-mode .hotspot { cursor: move; animation: none; border-color: #ffff00; }
+
+        @keyframes pulse-key {
+            0% { transform: translate(-50%, -50%) scale(0.9); box-shadow: 0 0 6px #ff5500; }
+            50% { transform: translate(-50%, -50%) scale(1.3); box-shadow: 0 0 22px #ffaa00; }
+            100% { transform: translate(-50%, -50%) scale(0.9); box-shadow: 0 0 6px #ff5500; }
+        }
+
+        @keyframes pulse-bg {
+            0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.6; }
+            50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.9; }
+            100% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.6; }
+        }
+
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.75); z-index: 999999;
+            justify-content: center; align-items: center; white-space: normal;
+        }
+
+        .modal-card {
+            width: 520px; max-width: 90%; max-height: 85vh; overflow-y: auto;
+            background: #f7f3e8; border-radius: 12px;
+            padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); border: 2px solid #8c684d; position: relative;
+        }
+        .modal-close { position: absolute; top: 12px; right: 16px; font-size: 24px; color: #8c684d; cursor: pointer; font-weight: bold; }
+        .character-name { font-size: 22px; font-weight: bold; color: #4a2c11; margin-bottom: 4px; }
+        .character-pos { font-size: 13px; color: #9c6b4e; margin-bottom: 8px; font-weight: bold; }
+        .character-native { font-size: 14px; color: #7a5c43; font-weight: bold; margin-bottom: 4px; }
+        .character-job { font-size: 14px; color: #7a5c43; margin-bottom: 12px; border-bottom: 2px solid #d4c5b3; padding-bottom: 8px; }
+        .character-story { font-size: 14px; color: #2c2520; line-height: 1.6; background: #eae3d2; padding: 12px; border-radius: 6px; }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <span>💡 左右拖动画卷，点击光点查看卡片</span>
+        <div class="legend-group">
+            <span class="legend-item"><span class="legend-dot key"></span>关键人物</span>
+            <span class="legend-item"><span class="legend-dot bg"></span>世情百态</span>
+        </div>
+        <button onclick="toggleEditMode()" id="editBtn">进入微调定位模式</button>
+        <button onclick="exportCoords()" id="exportBtn" style="display:none; background:#28a745;">导出精准坐标</button>
+    </div>
+
+    <div class="scroll-container" id="scrollContainer">
+        <div class="map-wrapper" id="mapWrapper">
+            <img src="qingming_map_2.jpg" alt="清明上河图" id="mapImage">
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-card">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <div class="character-name" id="modalName">人物姓名</div>
+            <div class="character-pos" id="modalPos">画中位置描述</div>
+            <div class="character-native" id="modalNative">籍贯：</div>
+            <div class="character-job" id="modalJob">身份/职业：</div>
+            <div class="character-story" id="modalStory">人物经历内容...</div>
+        </div>
+    </div>
+
+    <script>
+        // 定义 6 个核心关键人物的 id 集合
+        const keyCharacterIds = ["p3", "p8", "p1", "p9", "p6", "p7"];
+
+        let charactersData = [
+            {
+                "id": "p18",
+                "left": 97.53,
+                "top": 42.78,
+                "name": "何老西",
+                "pos": "画中位置：郊野小道上，赶着驮炭毛驴队往城内走去的乡村运炭翁。",
+                "native": "籍贯：开封府祥符县（城郊农户）",
+                "job": "身份职业：城郊运炭雇工 / 赶驴小贩",
+                "story": "北宋东京城人口逾百万，秋冬之际每日薪炭需求巨大。他平时以耕作为生，入冬后便受雇于城外薪炭行，自备毛驴前往郊外码头与炭场接货。他赶着挂有木鞍和驮筐的毛驴队，沿着郊野小道将成驮的木炭与石炭运入城内的茶坊、酒楼及富庶人家，以此赚取微薄的脚钱来补贴家用。"
+            },
+            {
+                "id": "p7",
+                "left": 82.03,
+                "top": 19.04,
+                "name": "赵员外",
+                "pos": "画中位置：迎亲队伍旁，骑着高头大马的富商。",
+                "native": "籍贯：东京城富商（祖籍江南）",
+                "job": "身份职业：巨商大贾（主营丝绸、茶叶）",
+                "story": "他早年靠着海外贸易与运河贩运积聚了庞大的家财，在商海中声名显赫。此次他出资巨万操办豪华的迎亲仪仗，将掌上明珠风风光光地嫁给了一位通过科举入仕、如今手握实权的寒门新贵官员之子，双方各取所需，结为儿女亲家。"
+            },
+            {
+                "id": "p6",
+                "left": 80.17,
+                "top": 82.29,
+                "name": "刘老实",
+                "pos": "画中位置：城郊农庄路口，正与一名穿着长衫的地主拱手交谈的庄农。",
+                "native": "籍贯：开封府祥符县",
+                "job": "身份职业：自耕兼佃农",
+                "story": "他名下虽有两亩薄田，但全家生计还要靠租种城外某官僚的五十亩水田来支撑。每年秋收过后，他不再需要向地主无偿提供人身依附性质的杂役，而是严格按照双方在县衙备案或私下订立的契约交纳租米。如果遇上灾荒年景或者地主租子太高，合同到期后他随时可以退租，拍拍屁股换一家地主去租地耕种。"
+            },
+            {
+                "id": "p5",
+                "left": 73.14,
+                "top": 16.24,
+                "name": "李小九",
+                "pos": "画中位置：汴河边草市旁，正挑着担子叫卖小吃的年轻小贩。",
+                "native": "籍贯：河南府洛阳县",
+                "job": "身份职业：市井流动饮食小贩",
+                "story": "他出身农家，本该按部就班地终年劳作。但他性格活络，不甘于乡村的清苦与束缚，前几年私自逃离原籍来到东京。刚进城时，他曾在饭铺当过洗碗伙计、在车行推过独轮车，如今自己东挪西借攒了点本钱，挑起担子在汴河草市旁卖起热气腾腾的煎饼。在汴京这片充满机遇的市井中，只要肯出卖力气和手艺，随时可以自立门户。"
+            },
+            {
+                "id": "p22",
+                "left": 59.65,
+                "top": 86.71,
+                "name": "船娘阿秀",
+                "pos": "画中位置：停泊在汴河岸边的小木船上，正生火做饭的年轻妇女。",
+                "native": "籍贯：水上船民",
+                "job": "身份职业：水上漂泊族",
+                "story": "她和家人常年以一叶小舟为家，漂泊在纵横交错的运河水系上。丈夫负责驾船帮商户运送货物，她在船尾生火做饭、操持家务。虽然没有固定的房产和土地，但伴随着大运河日夜不息的漕运船影，这片流动的碧波便是他们安身立命的全部世界。"
+            },
+            {
+                "id": "p1",
+                "left": 47.73,
+                "top": 68.87,
+                "name": "张二郎",
+                "pos": "画中位置：虹桥桥头处，肩挑货担、身穿短打、系麻绳腰带、正在吆喝的小贩。",
+                "native": "籍贯：河南府洛阳县",
+                "job": "身份职业：东京城内自营货郎（贩卖香药、干果与小杂货）",
+                "story": "原为洛阳近郊的一名普通农户，因家中土地狭小实在难以维生，便转卖土地另寻出路。政和年间，借着国家不再严格限制农民离土进城的宽松政策，他携妻带子来到东京谋生。起初在码头做扛包脚夫，凭着一股狠劲攒下微薄本钱后，便买了一副货物齐全的挑担，走街串巷当起了自食其力的货郎。"
+            },
+            {
+                "id": "p2",
+                "left": 51.54,
+                "top": 29.51,
+                "name": "陈阿大",
+                "pos": "画中位置：即将穿过虹桥、船桅杆正在降下的客货大船上，高声指挥拉纤的梢工。",
+                "native": "籍贯：江南东路常州",
+                "job": "身份职业：远航商船船长（梢工）",
+                "story": "他的家族世代以水运谋生。乘着南方经济蓬勃发展和大运河漕运空前繁忙的红利，他常年带领船队往返于常州、苏州与都城汴京之间。这次他受雇于富庶的南方粮商，护送着整整一船满载的南方稻米与苏湖丝绸穿过虹桥，迎着汴京喧闹的市声驶向码头。"
+            },
+            {
+                "id": "p9",
+                "left": 49.25,
+                "top": 65.77,
+                "name": "翠儿",
+                "pos": "画中位置：虹桥脚下茶肆门口，低头跟在主家身后、手提食盒的年轻丫鬟。",
+                "native": "籍贯：京东东路曹州",
+                "job": "身份职业：富贵人家雇佣的“典雇婢女”",
+                "story": "她因家中遭遇水灾欠下沉重债务，无奈被父母以“活契”形式送到东京一户富贵人家当丫鬟，期限暂定五年。合同白纸黑字写得清清楚楚，五年期满主人家必须依约放她赎身回家，或者由主家出面体面地将她嫁人。她并非终身为奴的贱籍奴隶，而是带有明确期限与劳务报酬的契约雇工。"
+            },
+            {
+                "id": "p8",
+                "left": 37.9,
+                "top": 61.94,
+                "name": "林文远",
+                "pos": "画中位置：城外运河边简易茶肆茶座内，歇息翻阅书籍的赶考书生。",
+                "native": "籍贯：福建路建州（今福建建瓯）",
+                "job": "身份职业：赴京赶考的举人（寒门士子）",
+                "story": "他的父亲是南方的一名普通茶农，家中既无祖传高官厚禄，也无世代门第依靠。但得益于南方雕版印刷术发达、书籍价格低廉，再加上朝廷全面推行不问门第出身的科举糊名考试，他靠着全族东拼西凑的盘缠一路向北。他坚信只要文章写得足够惊艳，哪怕祖上三代务农，也能一跃成为朝廷命官。"
+            },
+            {
+                "id": "p21",
+                "left": 35.46,
+                "top": 65.19,
+                "name": "吴道子",
+                "pos": "画中位置：街头路边，正摆摊为人画肖像和门神画的民间画师。",
+                "native": "籍贯：民间艺人",
+                "job": "身份职业：民间通俗画工",
+                "story": "他虽与唐代画圣同名，却只是个身怀绝技却流落市井的普通画工。他的画作从不入宫廷法眼，专门摆摊卖给普通市民过年贴门神、驱邪祈福或绘制世俗肖像。这门手艺既能让他勉强糊口，也折射出宋代文化艺术向广阔市民阶层全面普及的生动图景。"
+            },
+            {
+                "id": "p12",
+                "left": 33.82,
+                "top": 53.98,
+                "name": "孙二娘",
+                "pos": "画中位置：路边小茶摊旁，正麻利擦桌子迎客的中年妇人。",
+                "native": "籍贯：东京市井",
+                "job": "身份职业：茶摊老板娘",
+                "story": "丈夫负责清晨挑水和采购茶叶，她则负责在茶摊前迎来送往、手脚麻利地招呼南来北往的客商。在商品经济空前繁荣的大潮下，东京城中下层妇女走出深闺、抛头露面参与家庭生计与商业经营的现象极为普遍，她便是其中精明能干的缩影。"
+            },
+            {
+                "id": "p14",
+                "left": 29.81,
+                "top": 30.98,
+                "name": "汪邮臣",
+                "pos": "画中位置：官方递铺门口，卸下行装坐在石凳上休憩的铺兵。",
+                "native": "籍贯：京畿递铺",
+                "job": "身份职业：急递铺铺兵",
+                "story": "他常年负责朝廷边防水师与东京中枢之间的紧急公文传递，日夜兼程、风雨无阻。此刻趁着轮值换班的间隙，他卸下沉重的公文信匣与防身腰刀，坐在递铺门前的石凳上擦拭汗水、大口喝着凉茶，紧绷的神经在片刻的宁静中稍稍得到舒缓。"
+            },
+            {
+                "id": "p11",
+                "left": 25.45,
+                "top": 9.75,
+                "name": "老和尚圆慧",
+                "pos": "画中位置：大相国寺门前，正手持木鱼、向路人化缘的僧人。",
+                "native": "籍贯：开封府本地",
+                "job": "身份职业：京城大相国寺挂名僧人",
+                "story": "当时的皇家寺庙大相国寺不仅是清净的宗教修行之所，更是东京城内规模宏大、日进斗金的商业市场和瓦子租赁中心。他每天除了例行诵经拜佛，内心盘算最多的往往是寺庙所属的各大店铺今年又收了多少租金、香火钱是否丰厚。"
+            },
+            {
+                "id": "p10",
+                "left": 18.71,
+                "top": 60.17,
+                "name": "王虎",
+                "pos": "画中位置：城门洞旁，懒洋洋靠着墙角、手里拿着长矛的兵卒。",
+                "native": "籍贯：开封本地",
+                "job": "身份职业：东京驻军厢军士兵",
+                "story": "他应募入伍成为一名地方驻军士兵。平时除了偶尔被派去帮官府修葺城墙、搬运浩繁的漕粮之外，大部分时间便是在营地混口军粮度日。由于军队待遇一般且社会地位不高，他面对过往盘查的百姓时总透着几分倦怠与懒散，属于国家出钱养着的庞大驻防力量之一。"
+            },
+            {
+                "id": "p3",
+                "left": 15.06,
+                "top": 49.71,
+                "name": "王铁棍",
+                "pos": "画中位置：城门附近，肩扛重物、赤脚短衣、在货栈前休息的搬运工。",
+                "native": "籍贯：开封府祥符县",
+                "job": "身份职业：城门货栈自由雇工（搬运脚夫）",
+                "story": "他本是毫无恒产的无地贫民，但生逢盛世并没有沦为卖身为奴的贱民，而是选择与都城民间的“雇工行”签订了灵活的临时劳务契约。每天迎着晨曦到城门货栈扛包计件结算工钱，干一天活拿一天现钱，虽然劳累却保持着独立自主的身份。"
+            },
+            {
+                "id": "p13",
+                "left": 12.82,
+                "top": 40.27,
+                "name": "钱老西",
+                "pos": "画中位置：打铁铺内，正挥舞铁锤赤膊打铁的工匠。",
+                "native": "籍贯：东京城内",
+                "job": "身份职业：东京铁行工匠",
+                "story": "他祖传一手炉火纯青的打铁手艺，能够熟练打造各类农具与日常铁器。但在繁华京都谋生并非易事，他必须加入由同行业者组成的“行会”，按时向官府和行会头领缴纳规费，并在价格、工料标准上接受同行集体的共同约束，在规范与竞争中维持生计。"
+            },
+            {
+                "id": "p16",
+                "left": 12.77,
+                "top": 17.12,
+                "name": "郑相公",
+                "pos": "画中位置：高档酒楼包厢内，正与同僚推杯换盏的退休老官僚。",
+                "native": "籍贯：东京世家",
+                "job": "身份职业：前朝勋贵后代",
+                "story": "虽然家族门第依然显赫，但他内心深处却常常感到一阵失落。他敏锐地察觉到如今朝堂与地方的官场风气早已大变，昔日靠门荫世袭把持高位的时代一去不复返，如今周围举目望去全是通过科举拼杀上来的寒门士子，时代的洪流早已将旧日的门阀观念冲刷得七零八落。"
+            },
+            {
+                "id": "p17",
+                "left": 7.99,
+                "top": 54.72,
+                "name": "阿宝",
+                "pos": "画中位置：街边追逐嬉戏、手里拿着糖葫芦的小男孩。",
+                "native": "籍贯：开封本地",
+                "job": "身份职业：开封本地小市民之子",
+                "story": "东京城空前繁荣的市井商业不仅养活了奔波的大人，也催生了琳琅满目的儿童玩具与零食产业。手里举着冰糖葫芦的他在人群中欢快穿梭，泥娃娃、小傀儡、纸鸢风筝装点着他的童年，整座城市都弥漫着浓郁的商业化都市烟火气。"
+            },
+            {
+                "id": "p20",
+                "left": 6.87,
+                "top": 74.18,
+                "name": "马朝用",
+                "pos": "画中位置：“久住王员外家”客栈内，正清点账本的行商。",
+                "native": "籍贯：外地客商",
+                "job": "身份职业：外地盐商",
+                "story": "他常年离乡背井在外奔波，凭借着宋代高度发达的钞引（国家发行的榷盐凭证）和民间票号信贷系统，在全国各地纵横捭阖做着大宗商品买卖。此刻他正坐在客栈灯下仔细核对账目，盘算着这一季盐引的盈亏与下一次货物的周转。"
+            },
+            {
+                "id": "p19",
+                "left": 2.27,
+                "top": 40.71,
+                "name": "萧太医",
+                "pos": "画中位置：“赵太丞家”药铺内，正把脉的坐堂老中医。",
+                "native": "籍贯：东京市井",
+                "job": "身份职业：民间熟医",
+                "story": "虽然药铺招牌上挂着带有官方色彩的“太丞”字样，但他并非深居禁中的御医，而是凭借精湛的医术在市井街头开店自立的自由职业者。他的存在生动体现了宋代医药知识与诊疗服务走向民间、普及大众的医疗繁荣景象。"
+            },
+            {
+                "id": "p15",
+                "left": 0.57,
+                "top": 41.15,
+                "name": "鲁智深",
+                "pos": "画中位置：街角聚众围观、无所事事的闲汉。",
+                "native": "籍贯：东京城内",
+                "job": "身份职业：无固定职业的城市游民（俗称“无赖/泼皮”）",
+                "story": "他们是一群没有固定生计、终日在街头巷尾游荡的城市边缘人。平日里靠在码头收点微薄的保护费、帮闲跑腿维持生计，或者在繁华的瓦子勾栏里充当吆喝叫好的剧场托儿为生，是庞大都市急剧膨胀所催生的特殊社会群体。"
+            }
+        ];
+
+        let isEditMode = false;
+
+        function renderHotspots() {
+            const mapWrapper = document.getElementById('mapWrapper');
+            mapWrapper.querySelectorAll('.hotspot').forEach(el => el.remove());
+
+            charactersData.forEach(person => {
+                const hotspot = document.createElement('div');
+                
+                // 判断是否为关键核心人物，赋予不同类名以实现不同的颜色与动画
+                const isKey = keyCharacterIds.includes(person.id);
+                hotspot.className = isKey ? 'hotspot key-character' : 'hotspot';
+                
+                hotspot.style.left = person.left + '%';
+                hotspot.style.top = person.top + '%';
+                hotspot.id = person.id;
+                
+                const label = document.createElement('div');
+                label.className = 'hotspot-label';
+                label.innerText = person.name;
+                hotspot.appendChild(label);
+
+                hotspot.addEventListener('click', function(e) {
+                    if (isEditMode) return;
+                    e.stopPropagation();
+                    openModal(person);
+                });
+
+                hotspot.addEventListener('mousedown', startDrag);
+                mapWrapper.appendChild(hotspot);
+            });
+        }
+
+        function startDrag(e) {
+            if (!isEditMode) return;
+            e.stopPropagation();
+            const hotspot = e.currentTarget;
+            const mapWrapper = document.getElementById('mapWrapper');
+            const rect = mapWrapper.getBoundingClientRect();
+
+            function onMouseMove(moveEvent) {
+                let currentX = moveEvent.clientX - rect.left;
+                let currentY = moveEvent.clientY - rect.top;
+                
+                let leftPct = Math.max(0, Math.min(100, (currentX / rect.width) * 100)).toFixed(2);
+                let topPct = Math.max(0, Math.min(100, (currentY / rect.height) * 100)).toFixed(2);
+
+                hotspot.style.left = leftPct + '%';
+                hotspot.style.top = topPct + '%';
+
+                const p = charactersData.find(item => item.id === hotspot.id);
+                if (p) {
+                    p.left = parseFloat(leftPct);
+                    p.top = parseFloat(topPct);
+                }
+            }
+
+            function onMouseUp() {
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+            }
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        }
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            const container = document.body;
+            const btn = document.getElementById('editBtn');
+            const exportBtn = document.getElementById('exportBtn');
+            if (isEditMode) {
+                container.classList.add('edit-mode');
+                btn.innerText = "退出微调模式";
+                btn.style.background = "#6c757d";
+                exportBtn.style.display = "inline-block";
+            } else {
+                container.classList.remove('edit-mode');
+                btn.innerText = "进入微调定位模式";
+                btn.style.background = "#ff5500";
+                exportBtn.style.display = "none";
+            }
+        }
+
+        function exportCoords() {
+            console.log(JSON.stringify(charactersData, null, 2));
+            alert("最新精准坐标数据已输出到浏览器的控制台（F12 -> Console）！");
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const img = document.getElementById('mapImage');
+            if (img.complete && img.naturalHeight !== 0) {
+                renderHotspots();
+            } else {
+                img.onload = renderHotspots;
+            }
+            setTimeout(renderHotspots, 200);
+        });
+
+        function openModal(person) {
+            document.getElementById('modalName').innerText = person.name;
+            document.getElementById('modalPos').innerText = person.pos;
+            document.getElementById('modalNative').innerText = person.native;
+            document.getElementById('modalJob').innerText = person.job;
+            document.getElementById('modalStory').innerText = person.story;
+            document.getElementById('modalOverlay').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; }
+        document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+    </script>
+</body>
+</html>
